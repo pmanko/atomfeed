@@ -9,6 +9,7 @@ import org.ict4h.atomfeed.client.repository.AllFeeds;
 import org.ict4h.atomfeed.client.util.Util;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Iterator;
 import java.util.List;
 
@@ -30,13 +31,29 @@ public class FeedEnumerator implements Iterable<Entry>, Iterator<Entry> {
     private void initializeEnumeration() {
         // No entry from feed has been processed yet.
         if (marker.getLastReadEntryId() == null && marker.getFeedURIForLastReadEntry() == null) {
+            System.out.println("Atomfeed Client: initializing enumeration here: " + marker.getFeedUri());
+
             Feed feed = seekFirstFeed(marker.getFeedUri());
             this.currentFeed = feed;
             this.entries = feed.getEntries();
             return;
         }
 
-        setInitialEntries(marker.getFeedURIForLastReadEntry());
+        URI lastReadEntryUri = marker.getFeedURIForLastReadEntry(); 
+
+        // TODO: Fix this phantom port number elsewhere!
+        try {
+            if(marker.getFeedURIForLastReadEntry().toString().contains(".com")) {
+                lastReadEntryUri = new URI(lastReadEntryUri.toString().replace(":80", ""));
+            } 
+            if(marker.getFeedUri().toString().contains("https")) {
+                lastReadEntryUri = new URI(lastReadEntryUri.toString().replace("http", "https"));
+            }
+        } catch (URISyntaxException e) {
+            // nothing...
+        }
+
+        setInitialEntries(lastReadEntryUri);
     }
 
     private Feed seekFirstFeed(URI uri) {
@@ -68,7 +85,20 @@ public class FeedEnumerator implements Iterable<Entry>, Iterator<Entry> {
 
     private void fetchEntries() {
         URI nextArchiveUri = Util.getNextLink(currentFeed);
+
         if (nextArchiveUri != null && entries.isEmpty()) {
+            System.out.println("Atomfeed Client: next archive link: " + marker.getFeedUri());
+
+            // TODO: fix the database links and link generation on the server side instead of these hacks
+            if(this.marker.getFeedUri().toString().contains("https")) {
+                String fixed = nextArchiveUri.toString().replace("http", "https");
+                try {
+                    nextArchiveUri = new URI(fixed);
+                } catch (URISyntaxException e) {
+
+                }
+            }
+
             this.currentFeed = allFeeds.getFor(nextArchiveUri);
             this.entries = currentFeed.getEntries();
         }
